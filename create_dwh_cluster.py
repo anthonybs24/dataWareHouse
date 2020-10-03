@@ -19,16 +19,26 @@ redshift = boto3.client ('redshift', region_name = config.get("CLUSTER","REGION"
 
 # Create dwh s3 access role and attach 'AmazonS3ReadOnlyAccess' policy. Return role ARN
 def create_iam_role():
-    try: 
-        # Create the IAM role
-        dwhRole = iam.create_role(Path='/', RoleName = config.get("IAM_ROLE","ROLE_NAME"), \
-                                  AssumeRolePolicyDocument = json.dumps(\
-                                                                        {"Version": "2012-10-17", \
-                                                                         "Statement": [{"Effect": "Allow", \
-                                                                                        "Principal": {"Service": "redshift.amazonaws.com"}, \
-                                                                                        "Action": "sts:AssumeRole"}]\
-                                                                        }), \
-                                  Description = 'Allow redshift clusters to call AWS')
+    try:
+        # Get list of all IAM roles and check if the role already exists. If not, it will create new role
+        roles = iam.list_roles()['Roles']
+        roleExists = 'false'
+        i = 0
+        while (roleExists == 'false' and i < len(roles)):
+            if (roles[i]['RoleName'] == config.get("IAM_ROLE","ROLE_NAME")):
+                roleExists = 'true'
+            i += 1
+        
+        if roleExists == 'false':
+            # Create the IAM role
+            dwhRole = iam.create_role(Path='/', RoleName = config.get("IAM_ROLE","ROLE_NAME"), \
+                                      AssumeRolePolicyDocument = json.dumps(\
+                                                                            {"Version": "2012-10-17", \
+                                                                             "Statement": [{"Effect": "Allow", \
+                                                                                            "Principal": {"Service": "redshift.amazonaws.com"}, \
+                                                                                            "Action": "sts:AssumeRole"}]\
+                                                                            }), \
+                                      Description = 'Allow redshift clusters to call AWS')
     
         # Attach policy
         iam.attach_role_policy(RoleName = config.get("IAM_ROLE","ROLE_NAME"), PolicyArn = 'arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess')
@@ -42,28 +52,14 @@ def create_iam_role():
         print (e)
 
 # Create Redshift Cluster and Open an incoming TCP port to access the cluster endpoint
-def create_cluster():
+def create_cluster():                    
     try:
-        """
-        # Get list of all clusters
-        clusters = redshift.describe_clusters(ClusterIdentifier=config.get("CLUSTER","CLUSTER_ID"))['Clusters']
-        
-        # Check if cluster with the same Id already exists or not. If not, go ahead to create one
-        clusterExists = false;
-        i = 0
-        while (clusterExists == false and i < len(clusters)):
-            if clusters[i][ClusterIdentifier] == config.get("CLUSTER","CLUSTER_ID"):
-                clusterExists = true
-            i += 1
-            
         # Create cluster
-        if clusterExists == false:
-        """
         redshift.create_cluster(ClusterType = config.get("CLUSTER","CLUSTER_TYPE"), NodeType = config.get("CLUSTER","NODE_TYPE"), \
-                                    NumberOfNodes = int(config.get("CLUSTER","NUM_NODES")), \
-                                    ClusterIdentifier = config.get("CLUSTER","CLUSTER_ID"), DBName = config.get("CLUSTER","DB_NAME"), \
-                                    MasterUsername = config.get("CLUSTER","DB_USER"), MasterUserPassword = config.get("CLUSTER","DB_PASSWORD"), \
-                                    Port = int(config.get("CLUSTER","DB_PORT")), IamRoles = [config.get('IAM_ROLE','ARN')])
+                                NumberOfNodes = int(config.get("CLUSTER","NUM_NODES")), \
+                                ClusterIdentifier = config.get("CLUSTER","CLUSTER_ID"), DBName = config.get("CLUSTER","DB_NAME"), \
+                                MasterUsername = config.get("CLUSTER","DB_USER"), MasterUserPassword = config.get("CLUSTER","DB_PASSWORD"), \
+                                Port = int(config.get("CLUSTER","DB_PORT")), IamRoles = [config.get('IAM_ROLE','ARN')])
         
         # Check status of the cluster
         clusterProps = redshift.describe_clusters(ClusterIdentifier=config.get("CLUSTER","CLUSTER_ID"))['Clusters'][0]
@@ -87,19 +83,6 @@ def create_cluster():
         defaultSecurityGroup.authorize_ingress(GroupName= 'default', CidrIp='0.0.0.0/0', IpProtocol='TCP', \
                                                 FromPort=int(config.get("CLUSTER","DB_PORT")), ToPort=int(config.get("CLUSTER","DB_PORT")))
     
-    except Exception as e:
-        print (e)
-
-# Delete cluster & IAM role
-def delete_cluster_and_role ():
-    try:
-        # Delete cluster
-        response = redshift.delete_cluster( ClusterIdentifier=config.get("CLUSTER", "CLUSTER_ID"), SkipFinalClusterSnapshot=True)
-
-        # Detach policy and delete role
-        iam.detach_role_policy(RoleName=config.get('IAM_ROLE','ROLE_NAME'), PolicyArn="arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess")
-        iam.delete_role(RoleName=config.get('IAM_ROLE','ROLE_NAME'))
-        
     except Exception as e:
         print (e)
         

@@ -1,6 +1,6 @@
 import configparser
 import psycopg2
-from sql_queries import create_table_queries, drop_table_queries, copy_table_queries
+from sql_queries import create_table_queries, drop_table_queries
 from create_dwh_cluster import create_iam_role, create_cluster
 
 
@@ -15,10 +15,6 @@ def create_tables(cur, conn):
         cur.execute(query)
         conn.commit()
 
-def copy_tables(cur, conn):
-    for query in copy_table_queries:
-        cur.execute(query)
-        conn.commit()
 
 def main():
     config = configparser.ConfigParser()
@@ -41,9 +37,8 @@ def main():
         # Drop tables if they already exist
         drop_tables(cur, conn)
     
-        # create tables and copy data to staging table
+        # create tables
         create_tables(cur, conn)
-        copy_tables(cur, conn)
         
         # Close connection
         conn.close()
